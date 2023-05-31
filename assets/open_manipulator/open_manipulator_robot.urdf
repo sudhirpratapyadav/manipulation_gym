@@ -37,14 +37,14 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="./meshes/chain_link1.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="./meshes/chain_link1.obj" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="grey"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="./meshes/chain_link1.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="./meshes/chain_link1.obj" scale="0.001 0.001 0.001"/>
       </geometry>
     </collision>
     <inertial>
@@ -66,14 +66,14 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0.019"/>
       <geometry>
-        <mesh filename="./meshes/chain_link2.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="./meshes/chain_link2.obj" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="grey"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0.019"/>
       <geometry>
-        <mesh filename="./meshes/chain_link2.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="./meshes/chain_link2.obj" scale="0.001 0.001 0.001"/>
       </geometry>
     </collision>
     <inertial>
@@ -95,14 +95,14 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="./meshes/chain_link3.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="./meshes/chain_link3.obj" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="grey"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="./meshes/chain_link3.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="./meshes/chain_link3.obj" scale="0.001 0.001 0.001"/>
       </geometry>
     </collision>
     <inertial>
@@ -124,14 +124,14 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="./meshes/chain_link4.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="./meshes/chain_link4.obj" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="grey"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="./meshes/chain_link4.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="./meshes/chain_link4.obj" scale="0.001 0.001 0.001"/>
       </geometry>
     </collision>
     <inertial>
@@ -153,14 +153,14 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="./meshes/chain_link5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="./meshes/chain_link5.obj" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="grey"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="./meshes/chain_link5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="./meshes/chain_link5.obj" scale="0.001 0.001 0.001"/>
       </geometry>
     </collision>
     <inertial>
@@ -182,14 +182,14 @@
     <visual>
       <origin rpy="0 0 0" xyz="0.0 0.0 0"/>
       <geometry>
-        <mesh filename="./meshes/chain_link_grip_l.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="./meshes/chain_link_grip_l.obj" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="grey"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0.0 0.0 0"/>
       <geometry>
-        <mesh filename="./meshes/chain_link_grip_l.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="./meshes/chain_link_grip_l.obj" scale="0.001 0.001 0.001"/>
       </geometry>
     </collision>
     <inertial>
@@ -212,14 +212,14 @@
     <visual>
       <origin rpy="0 0 0" xyz="0.0 -0.0 0"/>
       <geometry>
-        <mesh filename="./meshes/chain_link_grip_r.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="./meshes/chain_link_grip_r.obj" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="grey"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0.0 -0.0 0"/>
       <geometry>
-        <mesh filename="./meshes/chain_link_grip_r.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="./meshes/chain_link_grip_r.obj" scale="0.001 0.001 0.001"/>
       </geometry>
     </collision>
     <inertial>
