@@ -60,7 +60,7 @@ actor_handles = []
 for i in range(num_envs):
     env = gym.create_env(sim, lower, upper, num_env_per_row)
     envs.append(env)
-    actor_handle = gym.create_actor(env, asset, pose, "OpenManipulatorRobot", 0, 1)
+    actor_handle = gym.create_actor(env, asset, pose, "OpenManipulatorRobot", i, 1)
     actor_handles.append(actor_handle)
 
 cam_props = gymapi.CameraProperties()
