@@ -1,7 +1,7 @@
 from isaacgym import gymapi
 
 
-headless = True
+headless = False
 
 gym = gymapi.acquire_gym()
 
@@ -50,12 +50,15 @@ env = gym.create_env(sim, lower, upper, 1)
 # Add asset to env
 actor_handle = gym.create_actor(env, asset, pose, "OpenManipulatorRobot", 0, 1)
 
+
+
 # Create and configure viewer and camera
 if not headless:
     cam_props = gymapi.CameraProperties()
     viewer = gym.create_viewer(sim, cam_props)
     gym.viewer_camera_look_at(viewer, None, gymapi.Vec3(20, 5, 20), gymapi.Vec3(0, 1, 0))
 
+gym.prepare_sim(sim)
 
 if headless:
     gym.simulate(sim)
