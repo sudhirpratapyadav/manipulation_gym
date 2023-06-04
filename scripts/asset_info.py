@@ -20,6 +20,8 @@ import pathlib
 from isaacgym import gymapi
 from isaacgym import gymutil
 
+import numpy as np
+
 
 def print_asset_info(asset, name):
     print("======== Asset info %s: ========" % (name))
@@ -50,6 +52,13 @@ def print_asset_info(asset, name):
         type = gym.get_asset_dof_type(asset, i)
         type_name = gym.get_dof_type_string(type)
         print(" %2d: '%s' (%s)" % (i, name, type_name))
+
+    
+
+    dof_properties = gym.get_asset_dof_properties(asset)
+    print("DOF Properties")
+    print(dof_properties)
+    print(dof_properties.dtype)
 
 
 def print_actor_info(gym, env, actor_handle):
@@ -155,7 +164,7 @@ asset_names = ["open manipulator x"]
 loaded_assets = []
 
 asset_options = gymapi.AssetOptions()
-asset_options.collapse_fixed_joints = True
+# asset_options.collapse_fixed_joints = True
 
 # Load the assets and ensure that we are successful
 for asset in asset_files:
