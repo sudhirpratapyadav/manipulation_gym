@@ -135,6 +135,8 @@ class VecTask(Env):
         """
         super().__init__(config, sim_device, graphics_device_id, headless)
 
+        
+
         self.sim_params = self._parse_sim_params(config['physics_engine'], config['sim'])
         if config['physics_engine'] == 'physx':
             self.physics_engine = gymapi.SIM_PHYSX
@@ -150,6 +152,9 @@ class VecTask(Env):
 
         self.gym = gymapi.acquire_gym()
         self._allocate_buffers()
+
+        
+
         # create envs, sim and viewer
         self.create_sim()
         self.gym.prepare_sim(self.sim)

@@ -6,17 +6,18 @@
 # --------------------------------------------------------
 
 import os
+import pathlib
 import torch
 import numpy as np
 from isaacgym import gymtorch
 from isaacgym import gymapi
 from isaacgym.torch_utils import to_torch, unscale, quat_apply, tensor_clamp, torch_rand_float
 from glob import glob
-from hora.utils.misc import tprint
+from manipulation_gym.utils.misc import tprint
 from .base.vec_task import VecTask
 
 
-class AllegroHandHora(VecTask):
+class OpenManipulatorPick(VecTask):
     def __init__(self, config, sim_device, graphics_device_id, headless):
         self.config = config
         # before calling init in VecTask, need to do
@@ -29,11 +30,11 @@ class AllegroHandHora(VecTask):
         # 4. setup reward
         self._setup_reward_config(config['env']['reward'])
         self.base_obj_scale = config['env']['baseObjScale']
-        self.save_init_pose = config['env']['genGrasps']
+        # self.save_init_pose = config['env']['genGrasps']
         self.aggregate_mode = self.config['env']['aggregateMode']
         self.up_axis = 'z'
         self.reset_z_threshold = self.config['env']['reset_height_threshold']
-        self.grasp_cache_name = self.config['env']['grasp_cache_name']
+        # self.grasp_cache_name = self.config['env']['grasp_cache_name']
         self.evaluate = self.config['on_evaluation']
         self.priv_info_dict = {
             'obj_position': (0, 3),
@@ -61,12 +62,12 @@ class AllegroHandHora(VecTask):
         net_contact_forces = self.gym.acquire_net_contact_force_tensor(self.sim)
 
         # create some wrapper tensors for different slices
-        self.allegro_hand_default_dof_pos = torch.zeros(self.num_allegro_hand_dofs, dtype=torch.float, device=self.device)
+        self.omx_default_dof_pos = torch.zeros(self.num_omx_dofs, dtype=torch.float, device=self.device)
         self.dof_state = gymtorch.wrap_tensor(dof_state_tensor)
         self.contact_forces = gymtorch.wrap_tensor(net_contact_forces).view(self.num_envs, -1, 3)
-        self.allegro_hand_dof_state = self.dof_state.view(self.num_envs, -1, 2)[:, :self.num_allegro_hand_dofs]
-        self.allegro_hand_dof_pos = self.allegro_hand_dof_state[..., 0]
-        self.allegro_hand_dof_vel = self.allegro_hand_dof_state[..., 1]
+        self.omx_dof_state = self.dof_state.view(self.num_envs, -1, 2)[:, :self.num_omx_dofs]
+        self.omx_dof_pos = self.omx_dof_state[..., 0]
+        self.omx_dof_vel = self.omx_dof_state[..., 1]
 
         self.rigid_body_states = gymtorch.wrap_tensor(rigid_body_tensor).view(self.num_envs, -1, 13)
         self.num_bodies = self.rigid_body_states.shape[1]
@@ -87,14 +88,16 @@ class AllegroHandHora(VecTask):
         self.force_decay = to_torch(self.force_decay, dtype=torch.float, device=self.device)
         self.rb_forces = torch.zeros((self.num_envs, self.num_bodies, 3), dtype=torch.float, device=self.device)
 
-        if self.randomize_scale and self.scale_list_init:
-            self.saved_grasping_states = {}
-            for s in self.randomize_scale_list:
-                self.saved_grasping_states[str(s)] = torch.from_numpy(np.load(
-                    f'cache/{self.grasp_cache_name}_grasp_50k_s{str(s).replace(".", "")}.npy'
-                )).float().to(self.device)
-        else:
-            assert self.save_init_pose
+        print('\n OPEN_MANIPUKLATOR_PICK_INIT STEP 1 \n')   
+
+        # if self.randomize_scale and self.scale_list_init:
+        #     self.saved_grasping_states = {}
+        #     for s in self.randomize_scale_list:
+        #         self.saved_grasping_states[str(s)] = torch.from_numpy(np.load(
+        #             f'cache/{self.grasp_cache_name}_grasp_50k_s{str(s).replace(".", "")}.npy'
+        #         )).float().to(self.device)
+        # else:
+        #     assert self.save_init_pose
 
         self.rot_axis_buf = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float)
 
@@ -117,6 +120,10 @@ class AllegroHandHora(VecTask):
         self.env_evaluated = 0
         self.max_evaluate_envs = 500000
 
+        print('\n OPEN_MANIPUKLATOR_PICK_INIT COMPLETE \n')
+
+        
+
     def _create_envs(self, num_envs, spacing, num_per_row):
         self._create_ground_plane()
         lower = gymapi.Vec3(-spacing, -spacing, 0.0)
@@ -124,115 +131,131 @@ class AllegroHandHora(VecTask):
 
         self._create_object_asset()
 
-        # set allegro_hand dof properties
-        self.num_allegro_hand_dofs = self.gym.get_asset_dof_count(self.hand_asset)
-        allegro_hand_dof_props = self.gym.get_asset_dof_properties(self.hand_asset)
+        # set omx dof properties
+        self.num_omx_dofs = self.gym.get_asset_dof_count(self.omx_asset)
+        omx_dof_props = self.gym.get_asset_dof_properties(self.omx_asset)
 
-        self.allegro_hand_dof_lower_limits = []
-        self.allegro_hand_dof_upper_limits = []
+        self.omx_dof_lower_limits = []
+        self.omx_dof_upper_limits = []
 
-        for i in range(self.num_allegro_hand_dofs):
-            self.allegro_hand_dof_lower_limits.append(allegro_hand_dof_props['lower'][i])
-            self.allegro_hand_dof_upper_limits.append(allegro_hand_dof_props['upper'][i])
-            allegro_hand_dof_props['effort'][i] = 0.5
+        for i in range(self.num_omx_dofs):
+            self.omx_dof_lower_limits.append(omx_dof_props['lower'][i])
+            self.omx_dof_upper_limits.append(omx_dof_props['upper'][i])
+            omx_dof_props['effort'][i] = 0.5
             if self.torque_control:
-                allegro_hand_dof_props['stiffness'][i] = 0.
-                allegro_hand_dof_props['damping'][i] = 0.
-                allegro_hand_dof_props['driveMode'][i] = gymapi.DOF_MODE_EFFORT
+                omx_dof_props['stiffness'][i] = 0.
+                omx_dof_props['damping'][i] = 0.
+                omx_dof_props['driveMode'][i] = gymapi.DOF_MODE_EFFORT
             else:
-                allegro_hand_dof_props['stiffness'][i] = self.config['env']['controller']['pgain']
-                allegro_hand_dof_props['damping'][i] = self.config['env']['controller']['dgain']
-            allegro_hand_dof_props['friction'][i] = 0.01
-            allegro_hand_dof_props['armature'][i] = 0.001
+                omx_dof_props['stiffness'][i] = self.config['env']['controller']['pgain']
+                omx_dof_props['damping'][i] = self.config['env']['controller']['dgain']
+            omx_dof_props['friction'][i] = 0.01
+            omx_dof_props['armature'][i] = 0.001
 
-        self.allegro_hand_dof_lower_limits = to_torch(self.allegro_hand_dof_lower_limits, device=self.device)
-        self.allegro_hand_dof_upper_limits = to_torch(self.allegro_hand_dof_upper_limits, device=self.device)
+        self.omx_dof_lower_limits = to_torch(self.omx_dof_lower_limits, device=self.device)
+        self.omx_dof_upper_limits = to_torch(self.omx_dof_upper_limits, device=self.device)
 
-        hand_pose, obj_pose = self._init_object_pose()
+        omx_pose, obj_pose = self._init_object_pose()
 
         # compute aggregate size
-        self.num_allegro_hand_bodies = self.gym.get_asset_rigid_body_count(self.hand_asset)
-        self.num_allegro_hand_shapes = self.gym.get_asset_rigid_shape_count(self.hand_asset)
-        max_agg_bodies = self.num_allegro_hand_bodies + 2
-        max_agg_shapes = self.num_allegro_hand_shapes + 2
+        self.num_omx_bodies = self.gym.get_asset_rigid_body_count(self.omx_asset)
+        self.num_omx_shapes = self.gym.get_asset_rigid_shape_count(self.omx_asset)
+        max_agg_bodies = self.num_omx_bodies + 2
+        max_agg_shapes = self.num_omx_shapes + 2
 
         self.envs = []
 
         self.object_init_state = []
 
-        self.hand_indices = []
+        self.omx_indices = []
         self.object_indices = []
 
-        allegro_hand_rb_count = self.gym.get_asset_rigid_body_count(self.hand_asset)
+        omx_rb_count = self.gym.get_asset_rigid_body_count(self.omx_asset)
         object_rb_count = 1
-        self.object_rb_handles = list(range(allegro_hand_rb_count, allegro_hand_rb_count + object_rb_count))
+        self.object_rb_handles = list(range(omx_rb_count, omx_rb_count + object_rb_count))
+
+        print(f"Setting up {num_envs} envs")
+
+
+        ## Testing aggregate Mode
+        # self.aggregate_mode = True
+        # for i in range(num_envs):
+        #     # create env instance
+        #     env_handle = self.gym.create_env(self.sim, lower, upper, num_per_row)
+        #     if self.aggregate_mode:
+        #         self.gym.begin_aggregate(env_handle, max_agg_bodies * 20, max_agg_shapes * 20, True)
+        #     if self.aggregate_mode:
+        #         self.gym.end_aggregate(env_handle)
+        #     self.envs.append(env_handle)
+
 
         for i in range(num_envs):
+
             # create env instance
-            env_ptr = self.gym.create_env(self.sim, lower, upper, num_per_row)
-            if self.aggregate_mode >= 1:
-                self.gym.begin_aggregate(env_ptr, max_agg_bodies * 20, max_agg_shapes * 20, True)
+            env_handle = self.gym.create_env(self.sim, lower, upper, num_per_row)
+            if self.aggregate_mode:
+                self.gym.begin_aggregate(env_handle, max_agg_bodies * 20, max_agg_shapes * 20, True)
 
             # add hand - collision filter = -1 to use asset collision filters set in mjcf loader
-            hand_actor = self.gym.create_actor(env_ptr, self.hand_asset, hand_pose, 'hand', i, -1, 0)
-            self.gym.set_actor_dof_properties(env_ptr, hand_actor, allegro_hand_dof_props)
-            hand_idx = self.gym.get_actor_index(env_ptr, hand_actor, gymapi.DOMAIN_SIM)
-            self.hand_indices.append(hand_idx)
+            omx_actor = self.gym.create_actor(env_handle, self.omx_asset, omx_pose, 'omx', i, -1, 0)
+            self.gym.set_actor_dof_properties(env_handle, omx_actor, omx_dof_props)
+            omx_idx = self.gym.get_actor_index(env_handle, omx_actor, gymapi.DOMAIN_SIM)
+            self.omx_indices.append(omx_idx)
 
             # add object
             object_type_id = np.random.choice(len(self.object_type_list), p=self.object_type_prob)
             object_asset = self.object_asset_list[object_type_id]
 
-            object_handle = self.gym.create_actor(env_ptr, object_asset, obj_pose, 'object', i, 0, 0)
+            object_handle = self.gym.create_actor(env_handle, object_asset, obj_pose, 'object', i, 0, 0)
             self.object_init_state.append([
                 obj_pose.p.x, obj_pose.p.y, obj_pose.p.z,
                 obj_pose.r.x, obj_pose.r.y, obj_pose.r.z, obj_pose.r.w,
                 0, 0, 0, 0, 0, 0
             ])
-            object_idx = self.gym.get_actor_index(env_ptr, object_handle, gymapi.DOMAIN_SIM)
+            object_idx = self.gym.get_actor_index(env_handle, object_handle, gymapi.DOMAIN_SIM)
             self.object_indices.append(object_idx)
 
             obj_scale = self.base_obj_scale
             if self.randomize_scale:
                 num_scales = len(self.randomize_scale_list)
                 obj_scale = np.random.uniform(self.randomize_scale_list[i % num_scales] - 0.025, self.randomize_scale_list[i % num_scales] + 0.025)
-            self.gym.set_actor_scale(env_ptr, object_handle, obj_scale)
+            self.gym.set_actor_scale(env_handle, object_handle, obj_scale)
             self._update_priv_buf(env_id=i, name='obj_scale', value=obj_scale, lower=0.6, upper=0.9)
 
             obj_com = [0, 0, 0]
             if self.randomize_com:
-                prop = self.gym.get_actor_rigid_body_properties(env_ptr, object_handle)
+                prop = self.gym.get_actor_rigid_body_properties(env_handle, object_handle)
                 assert len(prop) == 1
                 obj_com = [np.random.uniform(self.randomize_com_lower, self.randomize_com_upper),
                            np.random.uniform(self.randomize_com_lower, self.randomize_com_upper),
                            np.random.uniform(self.randomize_com_lower, self.randomize_com_upper)]
                 prop[0].com.x, prop[0].com.y, prop[0].com.z = obj_com
-                self.gym.set_actor_rigid_body_properties(env_ptr, object_handle, prop)
+                self.gym.set_actor_rigid_body_properties(env_handle, object_handle, prop)
             self._update_priv_buf(env_id=i, name='obj_com', value=obj_com, lower=-0.02, upper=0.02)
 
             obj_friction = 1.0
             if self.randomize_friction:
                 rand_friction = np.random.uniform(self.randomize_friction_lower, self.randomize_friction_upper)
-                hand_props = self.gym.get_actor_rigid_shape_properties(env_ptr, hand_actor)
-                for p in hand_props:
+                omx_props = self.gym.get_actor_rigid_shape_properties(env_handle, omx_actor)
+                for p in omx_props:
                     p.friction = rand_friction
-                self.gym.set_actor_rigid_shape_properties(env_ptr, hand_actor, hand_props)
+                self.gym.set_actor_rigid_shape_properties(env_handle, omx_actor, omx_props)
 
-                object_props = self.gym.get_actor_rigid_shape_properties(env_ptr, object_handle)
+                object_props = self.gym.get_actor_rigid_shape_properties(env_handle, object_handle)
                 for p in object_props:
                     p.friction = rand_friction
-                self.gym.set_actor_rigid_shape_properties(env_ptr, object_handle, object_props)
+                self.gym.set_actor_rigid_shape_properties(env_handle, object_handle, object_props)
                 obj_friction = rand_friction
             self._update_priv_buf(env_id=i, name='obj_friction', value=obj_friction, lower=0.0, upper=1.5)
 
-            if self.aggregate_mode > 0:
-                self.gym.end_aggregate(env_ptr)
+            if self.aggregate_mode:
+                self.gym.end_aggregate(env_handle)
 
-            self.envs.append(env_ptr)
+            self.envs.append(env_handle)
 
         self.object_init_state = to_torch(self.object_init_state, device=self.device, dtype=torch.float).view(self.num_envs, 13)
         self.object_rb_handles = to_torch(self.object_rb_handles, dtype=torch.long, device=self.device)
-        self.hand_indices = to_torch(self.hand_indices, dtype=torch.long, device=self.device)
+        self.omx_indices = to_torch(self.omx_indices, dtype=torch.long, device=self.device)
         self.object_indices = to_torch(self.object_indices, dtype=torch.long, device=self.device)
 
     def reset_idx(self, env_ids):
@@ -277,18 +300,18 @@ class AllegroHandHora(VecTask):
             self.root_state_tensor[self.object_indices[s_ids], :7] = sampled_pose[:, 16:]
             self.root_state_tensor[self.object_indices[s_ids], 7:13] = 0
             pos = sampled_pose[:, :16]
-            self.allegro_hand_dof_pos[s_ids, :] = pos
-            self.allegro_hand_dof_vel[s_ids, :] = 0
-            self.prev_targets[s_ids, :self.num_allegro_hand_dofs] = pos
-            self.cur_targets[s_ids, :self.num_allegro_hand_dofs] = pos
+            self.omx_dof_pos[s_ids, :] = pos
+            self.omx_dof_vel[s_ids, :] = 0
+            self.prev_targets[s_ids, :self.num_omx_dofs] = pos
+            self.cur_targets[s_ids, :self.num_omx_dofs] = pos
             self.init_pose_buf[s_ids, :] = pos.clone()
 
         object_indices = torch.unique(self.object_indices[env_ids]).to(torch.int32)
         self.gym.set_actor_root_state_tensor_indexed(self.sim, gymtorch.unwrap_tensor(self.root_state_tensor), gymtorch.unwrap_tensor(object_indices), len(object_indices))
-        hand_indices = self.hand_indices[env_ids].to(torch.int32)
+        omx_indices = self.omx_indices[env_ids].to(torch.int32)
         if not self.torque_control:
-            self.gym.set_dof_position_target_tensor_indexed(self.sim, gymtorch.unwrap_tensor(self.prev_targets), gymtorch.unwrap_tensor(hand_indices), len(env_ids))
-        self.gym.set_dof_state_tensor_indexed(self.sim, gymtorch.unwrap_tensor(self.dof_state), gymtorch.unwrap_tensor(hand_indices), len(env_ids))
+            self.gym.set_dof_position_target_tensor_indexed(self.sim, gymtorch.unwrap_tensor(self.prev_targets), gymtorch.unwrap_tensor(omx_indices), len(env_ids))
+        self.gym.set_dof_state_tensor_indexed(self.sim, gymtorch.unwrap_tensor(self.dof_state), gymtorch.unwrap_tensor(omx_indices), len(env_ids))
 
         self.progress_buf[env_ids] = 0
         self.obs_buf[env_ids] = 0
@@ -301,9 +324,9 @@ class AllegroHandHora(VecTask):
         self._refresh_gym()
         # deal with normal observation, do sliding window
         prev_obs_buf = self.obs_buf_lag_history[:, 1:].clone()
-        joint_noise_matrix = (torch.rand(self.allegro_hand_dof_pos.shape) * 2.0 - 1.0) * self.joint_noise_scale
+        joint_noise_matrix = (torch.rand(self.omx_dof_pos.shape) * 2.0 - 1.0) * self.joint_noise_scale
         cur_obs_buf = unscale(
-            joint_noise_matrix.to(self.device) + self.allegro_hand_dof_pos, self.allegro_hand_dof_lower_limits, self.allegro_hand_dof_upper_limits
+            joint_noise_matrix.to(self.device) + self.omx_dof_pos, self.omx_dof_lower_limits, self.omx_dof_upper_limits
         ).clone().unsqueeze(1)
         cur_tar_buf = self.cur_targets[:, None]
         cur_obs_buf = torch.cat([cur_obs_buf, cur_tar_buf], dim=-1)
@@ -312,10 +335,10 @@ class AllegroHandHora(VecTask):
         # refill the initialized buffers
         at_reset_env_ids = self.at_reset_buf.nonzero(as_tuple=False).squeeze(-1)
         self.obs_buf_lag_history[at_reset_env_ids, :, 0:16] = unscale(
-            self.allegro_hand_dof_pos[at_reset_env_ids], self.allegro_hand_dof_lower_limits,
-            self.allegro_hand_dof_upper_limits
+            self.omx_dof_pos[at_reset_env_ids], self.omx_dof_lower_limits,
+            self.omx_dof_upper_limits
         ).clone().unsqueeze(1)
-        self.obs_buf_lag_history[at_reset_env_ids, :, 16:32] = self.allegro_hand_dof_pos[at_reset_env_ids].unsqueeze(1)
+        self.obs_buf_lag_history[at_reset_env_ids, :, 16:32] = self.omx_dof_pos[at_reset_env_ids].unsqueeze(1)
         t_buf = (self.obs_buf_lag_history[:, -3:].reshape(self.num_envs, -1)).clone()
 
         self.obs_buf[:, :t_buf.shape[1]] = t_buf
@@ -327,7 +350,7 @@ class AllegroHandHora(VecTask):
     def compute_reward(self, actions):
         self.rot_axis_buf[:, -1] = -1
         # pose diff penalty
-        pose_diff_penalty = ((self.allegro_hand_dof_pos - self.init_pose_buf) ** 2).sum(-1)
+        pose_diff_penalty = ((self.omx_dof_pos - self.init_pose_buf) ** 2).sum(-1)
         # work and torque penalty
         torque_penalty = (self.torques ** 2).sum(-1)
         work_penalty = ((self.torques * self.dof_vel_finite_diff).sum(-1)) ** 2
@@ -336,7 +359,7 @@ class AllegroHandHora(VecTask):
         torque_pscale = self.torque_penalty_scale
         work_pscale = self.work_penalty_scale
 
-        self.rew_buf[:], log_r_reward, olv_penalty = compute_hand_reward(
+        self.rew_buf[:], log_r_reward, olv_penalty = compute_omx_reward(
             self.object_linvel, obj_linv_pscale,
             self.object_angvel, self.rot_axis_buf, self.rotate_reward_scale,
             self.angvel_clip_max, self.angvel_clip_min,
@@ -406,7 +429,7 @@ class AllegroHandHora(VecTask):
     def pre_physics_step(self, actions):
         self.actions = actions.clone().to(self.device)
         targets = self.prev_targets + 1 / 24 * self.actions
-        self.cur_targets[:] = tensor_clamp(targets, self.allegro_hand_dof_lower_limits, self.allegro_hand_dof_upper_limits)
+        self.cur_targets[:] = tensor_clamp(targets, self.omx_dof_lower_limits, self.omx_dof_upper_limits)
         self.prev_targets[:] = self.cur_targets.clone()
 
         if self.force_scale > 0.0:
@@ -435,10 +458,10 @@ class AllegroHandHora(VecTask):
         return self.obs_dict, self.rew_buf, self.reset_buf, self.extras
 
     def update_low_level_control(self):
-        previous_dof_pos = self.allegro_hand_dof_pos.clone()
+        previous_dof_pos = self.omx_dof_pos.clone()
         self._refresh_gym()
         if self.torque_control:
-            dof_pos = self.allegro_hand_dof_pos
+            dof_pos = self.omx_dof_pos
             dof_vel = (dof_pos - previous_dof_pos) / self.dt
             self.dof_vel_finite_diff = dof_vel.clone()
             torques = self.p_gain * (self.cur_targets - dof_pos) - self.d_gain * dof_vel
@@ -520,16 +543,16 @@ class AllegroHandHora(VecTask):
         self.object_type_prob = []
         self.object_type_list = []
         self.asset_files_dict = {
-            'simple_tennis_ball': 'assets/ball.urdf',
+            'simple_tennis_ball': 'assets/ball/ball.urdf',
         }
         for p_id, prim in enumerate(primitive_list):
             if 'cuboid' in prim:
                 subset_name = self.object_type.split('_')[-1]
-                cuboids = sorted(glob(f'../assets/cuboid/{subset_name}/*.urdf'))
+                cuboids = sorted(glob(f'assets/cuboid/{subset_name}/*.urdf'))
                 cuboid_list = [f'cuboid_{i}' for i in range(len(cuboids))]
                 self.object_type_list += cuboid_list
                 for i, name in enumerate(cuboids):
-                    self.asset_files_dict[f'cuboid_{i}'] = name.replace('../assets/', '')
+                    self.asset_files_dict[f'cuboid_{i}'] = name.replace('assets/', '')
                 self.object_type_prob += [raw_prob[p_id] / len(cuboid_list) for _ in cuboid_list]
             elif 'cylinder' in prim:
                 subset_name = self.object_type.split('_')[-1]
@@ -537,7 +560,7 @@ class AllegroHandHora(VecTask):
                 cylinder_list = [f'cylinder_{i}' for i in range(len(cylinders))]
                 self.object_type_list += cylinder_list
                 for i, name in enumerate(cylinders):
-                    self.asset_files_dict[f'cylinder_{i}'] = name.replace('../assets/', '')
+                    self.asset_files_dict[f'cylinder_{i}'] = name.replace('assets/', '')
                 self.object_type_prob += [raw_prob[p_id] / len(cylinder_list) for _ in cylinder_list]
             else:
                 self.object_type_list += [prim]
@@ -563,23 +586,27 @@ class AllegroHandHora(VecTask):
         self.work_penalty_scale = r_config['workPenaltyScale']
 
     def _create_object_asset(self):
+
+        print("Creating object assets")
+
         # object file to asset
-        asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../')
-        hand_asset_file = self.config['env']['asset']['handAsset']
-        # load hand asset
-        hand_asset_options = gymapi.AssetOptions()
-        hand_asset_options.flip_visual_attachments = False
-        hand_asset_options.fix_base_link = True
-        hand_asset_options.collapse_fixed_joints = True
-        hand_asset_options.disable_gravity = True
-        hand_asset_options.thickness = 0.001
-        hand_asset_options.angular_damping = 0.01
+        asset_root =  os.path.join(pathlib.Path(__file__).parent.parent.parent.resolve(), "assets")
+
+        omx_asset_file = self.config['env']['asset']['open_manipulator_asset']
+        # load omx asset
+        omx_asset_options = gymapi.AssetOptions()
+        omx_asset_options.flip_visual_attachments = False
+        omx_asset_options.fix_base_link = True
+        omx_asset_options.collapse_fixed_joints = True
+        omx_asset_options.disable_gravity = True
+        omx_asset_options.thickness = 0.001
+        omx_asset_options.angular_damping = 0.01
 
         if self.torque_control:
-            hand_asset_options.default_dof_drive_mode = gymapi.DOF_MODE_EFFORT
+            omx_asset_options.default_dof_drive_mode = gymapi.DOF_MODE_EFFORT
         else:
-            hand_asset_options.default_dof_drive_mode = gymapi.DOF_MODE_POS
-        self.hand_asset = self.gym.load_asset(self.sim, asset_root, hand_asset_file, hand_asset_options)
+            omx_asset_options.default_dof_drive_mode = gymapi.DOF_MODE_POS
+        self.omx_asset = self.gym.load_asset(self.sim, asset_root, omx_asset_file, omx_asset_options)
 
         # load object asset
         self.object_asset_list = []
@@ -590,34 +617,35 @@ class AllegroHandHora(VecTask):
             self.object_asset_list.append(object_asset)
 
     def _init_object_pose(self):
-        allegro_hand_start_pose = gymapi.Transform()
-        allegro_hand_start_pose.p = gymapi.Vec3(0, 0, 0.5)
-        allegro_hand_start_pose.r = gymapi.Quat.from_axis_angle(
+        omx_start_pose = gymapi.Transform()
+        omx_start_pose.p = gymapi.Vec3(0, 0, 0.5)
+        omx_start_pose.r = gymapi.Quat.from_axis_angle(
             gymapi.Vec3(0, 1, 0), -np.pi / 2) * gymapi.Quat.from_axis_angle(gymapi.Vec3(1, 0, 0), np.pi / 2)
         object_start_pose = gymapi.Transform()
         object_start_pose.p = gymapi.Vec3()
-        object_start_pose.p.x = allegro_hand_start_pose.p.x
+        object_start_pose.p.x = omx_start_pose.p.x
         pose_dx, pose_dy, pose_dz = -0.01, -0.04, 0.15
 
-        object_start_pose.p.x = allegro_hand_start_pose.p.x + pose_dx
-        object_start_pose.p.y = allegro_hand_start_pose.p.y + pose_dy
-        object_start_pose.p.z = allegro_hand_start_pose.p.z + pose_dz
+        object_start_pose.p.x = omx_start_pose.p.x + pose_dx
+        object_start_pose.p.y = omx_start_pose.p.y + pose_dy
+        object_start_pose.p.z = omx_start_pose.p.z + pose_dz
 
-        object_start_pose.p.y = allegro_hand_start_pose.p.y - 0.01
+        object_start_pose.p.y = omx_start_pose.p.y - 0.01
         # for grasp pose generation, it is used to initialize the object
         # it should be slightly higher than the fingertip
         # so it is set to be 0.66 for internal allegro and 0.64 for the public allegro
         # ----
         # for in-hand object rotation, the initialization of z is only used in the first step
         # it is set to be 0.65 for backward compatibility
-        object_z = 0.66 if self.save_init_pose else 0.65
-        if 'internal' not in self.grasp_cache_name:
-            object_z -= 0.02
+        # object_z = 0.66 if self.save_init_pose else 0.65
+        object_z = 0.65
+        # if 'internal' not in self.grasp_cache_name:
+        #     object_z -= 0.02
         object_start_pose.p.z = object_z
-        return allegro_hand_start_pose, object_start_pose
+        return omx_start_pose, object_start_pose
 
 
-def compute_hand_reward(
+def compute_omx_reward(
     object_linvel, object_linvel_penalty_scale: float,
     object_angvel, rotation_axis, rotate_reward_scale: float,
     angvel_clip_max: float, angvel_clip_min: float,

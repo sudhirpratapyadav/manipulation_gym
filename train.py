@@ -27,11 +27,11 @@ from termcolor import cprint
 from omegaconf import DictConfig, OmegaConf
 from hydra.utils import to_absolute_path
 
-from hora.algo.ppo.ppo import PPO
-from hora.algo.padapt.padapt import ProprioAdapt
-from hora.tasks import isaacgym_task_map
-from hora.utils.reformat import omegaconf_to_dict, print_dict
-from hora.utils.misc import set_np_formatting, set_seed, git_hash, git_diff_config
+from manipulation_gym.algo.ppo.ppo import PPO
+from manipulation_gym.algo.padapt.padapt import ProprioAdapt
+from manipulation_gym.tasks import isaacgym_task_map
+from manipulation_gym.utils.reformat import omegaconf_to_dict, print_dict
+from manipulation_gym.utils.misc import set_np_formatting, set_seed, git_hash, git_diff_config
 
 
 ## OmegaConf & Hydra Config
@@ -64,6 +64,8 @@ def main(config: DictConfig):
         headless=config.headless,
     )
 
+    
+
     output_dif = os.path.join('outputs', config.train.ppo.output_name)
     os.makedirs(output_dif, exist_ok=True)
     agent = eval(config.train.algo)(env, output_dif, full_config=config)
@@ -73,7 +75,7 @@ def main(config: DictConfig):
         agent.test()
     else:
         date = str(datetime.datetime.now().strftime('%m%d%H'))
-        print(git_diff_config('./'))
+        # print(git_diff_config('./'))
         os.system(f'git diff HEAD > {output_dif}/gitdiff.patch')
         with open(os.path.join(output_dif, f'config_{date}_{git_hash()}.yaml'), 'w') as f:
             f.write(OmegaConf.to_yaml(config))
@@ -89,7 +91,10 @@ def main(config: DictConfig):
             if user_input != 'yes':
                 exit()
 
+        print(f"Load train checkpoint: {config.train.load_path}")
         agent.restore_train(config.train.load_path)
+
+        print("Starting training")
         agent.train()
 
 

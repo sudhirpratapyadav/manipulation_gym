@@ -14,11 +14,11 @@ import os
 import time
 import torch
 
-from hora.algo.ppo.experience import ExperienceBuffer
-from hora.algo.models.models import ActorCritic
-from hora.algo.models.running_mean_std import RunningMeanStd
+from manipulation_gym.algo.ppo.experience import ExperienceBuffer
+from manipulation_gym.algo.models.models import ActorCritic
+from manipulation_gym.algo.models.running_mean_std import RunningMeanStd
 
-from hora.utils.misc import AverageScalarMeter
+from manipulation_gym.utils.misc import AverageScalarMeter
 
 from tensorboardX import SummaryWriter
 
@@ -28,6 +28,9 @@ class PPO(object):
         self.device = full_config['rl_device']
         self.network_config = full_config.train.network
         self.ppo_config = full_config.train.ppo
+
+        
+
         # ---- build environment ----
         self.env = env
         self.num_actors = self.ppo_config['num_actors']
@@ -55,6 +58,7 @@ class PPO(object):
         self.model.to(self.device)
         self.running_mean_std = RunningMeanStd(self.obs_shape).to(self.device)
         self.value_mean_std = RunningMeanStd((1,)).to(self.device)
+
         # ---- Output Dir ----
         # allows us to specify a folder where all experiments will reside
         self.output_dir = output_dif
@@ -80,12 +84,16 @@ class PPO(object):
         self.normalize_advantage = self.ppo_config['normalize_advantage']
         self.normalize_input = self.ppo_config['normalize_input']
         self.normalize_value = self.ppo_config['normalize_value']
+
         # ---- PPO Collect Param ----
         self.horizon_length = self.ppo_config['horizon_length']
         self.batch_size = self.horizon_length * self.num_actors
         self.minibatch_size = self.ppo_config['minibatch_size']
         self.mini_epochs_num = self.ppo_config['mini_epochs']
         assert self.batch_size % self.minibatch_size == 0 or full_config.test
+
+        
+
         # ---- scheduler ----
         self.kl_threshold = self.ppo_config['kl_threshold']
         self.scheduler = AdaptiveScheduler(self.kl_threshold)
@@ -118,6 +126,8 @@ class PPO(object):
         self.data_collect_time = 0
         self.rl_train_time = 0
         self.all_time = 0
+
+        print("PPO INIT COMPLETE")
 
     def write_stats(self, a_losses, c_losses, b_losses, entropies, kls):
         self.writer.add_scalar('performance/RLTrainFPS', self.agent_steps / self.rl_train_time, self.agent_steps)

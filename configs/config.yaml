@@ -2,7 +2,8 @@
 task_name: ${task.name}
 
 # if set to positive integer, overrides the default number of environments
-num_envs: ''
+# num_envs: ''
+num_envs: 16 
 
 # seed - set to -1 to choose random seed
 seed: 42

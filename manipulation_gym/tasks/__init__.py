@@ -27,13 +27,11 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
-from hora.tasks.allegro_hand_hora import AllegroHandHora
-from hora.tasks.allegro_hand_grasp import AllegroHandGrasp
+from manipulation_gym.tasks.open_manipulator_pick import OpenManipulatorPick
+from manipulation_gym.tasks.open_manipulator_place import OpenManipulatorPlace
 
 # Mappings from strings to environments
 isaacgym_task_map = {
-    'AllegroHandHora': AllegroHandHora,
-    'AllegroHandGrasp': AllegroHandGrasp,
-    'PublicAllegroHandHora': AllegroHandHora,
-    'PublicAllegroHandGrasp': AllegroHandGrasp,
+    'OpenManipulatorPick': OpenManipulatorPick,
+    'OpenManipulatorPlace': OpenManipulatorPlace,
 }

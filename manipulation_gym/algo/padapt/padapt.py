@@ -11,9 +11,9 @@ import torch
 import numpy as np
 from termcolor import cprint
 
-from hora.utils.misc import AverageScalarMeter, tprint
-from hora.algo.models.models import ActorCritic
-from hora.algo.models.running_mean_std import RunningMeanStd
+from manipulation_gym.utils.misc import AverageScalarMeter, tprint
+from manipulation_gym.algo.models.models import ActorCritic
+from manipulation_gym.algo.models.running_mean_std import RunningMeanStd
 from tensorboardX import SummaryWriter
 
 

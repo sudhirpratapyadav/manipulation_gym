@@ -12,7 +12,7 @@ env:
 
   episodeLength: 400
   enableDebugVis: False
-  aggregateMode: 1
+  aggregateMode: False
 
   controller:
     torque_control: True
@@ -20,7 +20,7 @@ env:
     pgain: 3
     dgain: 0.1
 
-  genGrasps: False
+  # genGrasps: False
 
   clipObservations: 5.0
   clipActions: 1.0
@@ -79,11 +79,11 @@ env:
     enableObjFriction: True
 
   object:
-    type: 'block' # can be block, egg or pen
+    type: 'cuboid' # can be cube 
     sampleProb: [1.0]
 
   asset:
-    handAsset: 'assets/allegro/allegro_internal.urdf'
+    open_manipulator_asset: 'open_manipulator/open_manipulator_robot.urdf'
 
   # set to True if you use camera sensors in the environment
   enableCameraSensors: False
