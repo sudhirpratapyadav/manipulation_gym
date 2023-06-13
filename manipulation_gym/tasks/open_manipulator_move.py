@@ -16,8 +16,7 @@ from glob import glob
 from manipulation_gym.utils.misc import tprint
 from .base.vec_task import VecTask
 
-
-class OpenManipulatorPick(VecTask):
+class OpenManipulatorMove(VecTask):
     def __init__(self, config, sim_device, graphics_device_id, headless):
         self.config = config
         # before calling init in VecTask, need to do
@@ -25,16 +24,11 @@ class OpenManipulatorPick(VecTask):
         self._setup_domain_rand_config(config['env']['randomization'])
         # 2. setup privileged information
         self._setup_priv_option_config(config['env']['privInfo'])
-        # 3. setup object assets
-        self._setup_object_info(config['env']['object'])
         # 4. setup reward
         self._setup_reward_config(config['env']['reward'])
-        self.base_obj_scale = config['env']['baseObjScale']
-        # self.save_init_pose = config['env']['genGrasps']
+        
         self.aggregate_mode = self.config['env']['aggregateMode']
         self.up_axis = 'z'
-        self.reset_z_threshold = self.config['env']['reset_height_threshold']
-        # self.grasp_cache_name = self.config['env']['grasp_cache_name']
         self.evaluate = self.config['on_evaluation']
         self.priv_info_dict = {
             'obj_position': (0, 3),
@@ -80,6 +74,7 @@ class OpenManipulatorPick(VecTask):
 
         self.prev_targets = torch.zeros((self.num_envs, self.num_dofs), dtype=torch.float, device=self.device)
         self.cur_targets = torch.zeros((self.num_envs, self.num_dofs), dtype=torch.float, device=self.device)
+        
         # object apply random forces parameters
         self.force_scale = self.config['env'].get('forceScale', 0.0)
         self.random_force_prob_scalar = self.config['env'].get('randomForceProbScalar', 0.0)
@@ -89,15 +84,6 @@ class OpenManipulatorPick(VecTask):
         self.rb_forces = torch.zeros((self.num_envs, self.num_bodies, 3), dtype=torch.float, device=self.device)
 
         print('\n OPEN_MANIPUKLATOR_PICK_INIT STEP 1 \n')   
-
-        # if self.randomize_scale and self.scale_list_init:
-        #     self.saved_grasping_states = {}
-        #     for s in self.randomize_scale_list:
-        #         self.saved_grasping_states[str(s)] = torch.from_numpy(np.load(
-        #             f'cache/{self.grasp_cache_name}_grasp_50k_s{str(s).replace(".", "")}.npy'
-        #         )).float().to(self.device)
-        # else:
-        #     assert self.save_init_pose
 
         self.rot_axis_buf = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float)
 
@@ -122,14 +108,12 @@ class OpenManipulatorPick(VecTask):
 
         print('\n OPEN_MANIPUKLATOR_PICK_INIT COMPLETE \n')
 
-        
-
     def _create_envs(self, num_envs, spacing, num_per_row):
         self._create_ground_plane()
         lower = gymapi.Vec3(-spacing, -spacing, 0.0)
         upper = gymapi.Vec3(spacing, spacing, spacing)
 
-        self._create_object_asset()
+        self._create_assets()
 
         # set omx dof properties
         self.num_omx_dofs = self.gym.get_asset_dof_count(self.omx_asset)
@@ -155,7 +139,7 @@ class OpenManipulatorPick(VecTask):
         self.omx_dof_lower_limits = to_torch(self.omx_dof_lower_limits, device=self.device)
         self.omx_dof_upper_limits = to_torch(self.omx_dof_upper_limits, device=self.device)
 
-        omx_pose, obj_pose = self._init_object_pose()
+        omx_pose = self._init_actor_pose()
 
         # compute aggregate size
         self.num_omx_bodies = self.gym.get_asset_rigid_body_count(self.omx_asset)
@@ -165,29 +149,9 @@ class OpenManipulatorPick(VecTask):
 
         self.envs = []
 
-        self.object_init_state = []
-
         self.omx_indices = []
-        self.object_indices = []
-
-        omx_rb_count = self.gym.get_asset_rigid_body_count(self.omx_asset)
-        object_rb_count = 1
-        self.object_rb_handles = list(range(omx_rb_count, omx_rb_count + object_rb_count))
 
         print(f"Setting up {num_envs} envs")
-
-
-        ## Testing aggregate Mode
-        # self.aggregate_mode = True
-        # for i in range(num_envs):
-        #     # create env instance
-        #     env_handle = self.gym.create_env(self.sim, lower, upper, num_per_row)
-        #     if self.aggregate_mode:
-        #         self.gym.begin_aggregate(env_handle, max_agg_bodies * 20, max_agg_shapes * 20, True)
-        #     if self.aggregate_mode:
-        #         self.gym.end_aggregate(env_handle)
-        #     self.envs.append(env_handle)
-
 
         for i in range(num_envs):
 
@@ -202,80 +166,19 @@ class OpenManipulatorPick(VecTask):
             omx_idx = self.gym.get_actor_index(env_handle, omx_actor, gymapi.DOMAIN_SIM)
             self.omx_indices.append(omx_idx)
 
-            # add object
-            object_type_id = np.random.choice(len(self.object_type_list), p=self.object_type_prob)
-            object_asset = self.object_asset_list[object_type_id]
-
-            object_handle = self.gym.create_actor(env_handle, object_asset, obj_pose, 'object', i, 0, 0)
-            self.object_init_state.append([
-                obj_pose.p.x, obj_pose.p.y, obj_pose.p.z,
-                obj_pose.r.x, obj_pose.r.y, obj_pose.r.z, obj_pose.r.w,
-                0, 0, 0, 0, 0, 0
-            ])
-            object_idx = self.gym.get_actor_index(env_handle, object_handle, gymapi.DOMAIN_SIM)
-            self.object_indices.append(object_idx)
-
-            obj_scale = self.base_obj_scale
-            if self.randomize_scale:
-                num_scales = len(self.randomize_scale_list)
-                obj_scale = np.random.uniform(self.randomize_scale_list[i % num_scales] - 0.025, self.randomize_scale_list[i % num_scales] + 0.025)
-            self.gym.set_actor_scale(env_handle, object_handle, obj_scale)
-            self._update_priv_buf(env_id=i, name='obj_scale', value=obj_scale, lower=0.6, upper=0.9)
-
-            obj_com = [0, 0, 0]
-            if self.randomize_com:
-                prop = self.gym.get_actor_rigid_body_properties(env_handle, object_handle)
-                assert len(prop) == 1
-                obj_com = [np.random.uniform(self.randomize_com_lower, self.randomize_com_upper),
-                           np.random.uniform(self.randomize_com_lower, self.randomize_com_upper),
-                           np.random.uniform(self.randomize_com_lower, self.randomize_com_upper)]
-                prop[0].com.x, prop[0].com.y, prop[0].com.z = obj_com
-                self.gym.set_actor_rigid_body_properties(env_handle, object_handle, prop)
-            self._update_priv_buf(env_id=i, name='obj_com', value=obj_com, lower=-0.02, upper=0.02)
-
-            obj_friction = 1.0
-            if self.randomize_friction:
-                rand_friction = np.random.uniform(self.randomize_friction_lower, self.randomize_friction_upper)
-                omx_props = self.gym.get_actor_rigid_shape_properties(env_handle, omx_actor)
-                for p in omx_props:
-                    p.friction = rand_friction
-                self.gym.set_actor_rigid_shape_properties(env_handle, omx_actor, omx_props)
-
-                object_props = self.gym.get_actor_rigid_shape_properties(env_handle, object_handle)
-                for p in object_props:
-                    p.friction = rand_friction
-                self.gym.set_actor_rigid_shape_properties(env_handle, object_handle, object_props)
-                obj_friction = rand_friction
-            self._update_priv_buf(env_id=i, name='obj_friction', value=obj_friction, lower=0.0, upper=1.5)
-
             if self.aggregate_mode:
                 self.gym.end_aggregate(env_handle)
 
             self.envs.append(env_handle)
 
-        self.object_init_state = to_torch(self.object_init_state, device=self.device, dtype=torch.float).view(self.num_envs, 13)
-        self.object_rb_handles = to_torch(self.object_rb_handles, dtype=torch.long, device=self.device)
         self.omx_indices = to_torch(self.omx_indices, dtype=torch.long, device=self.device)
-        self.object_indices = to_torch(self.object_indices, dtype=torch.long, device=self.device)
 
     def reset_idx(self, env_ids):
         if self.randomize_mass:
             lower, upper = self.randomize_mass_lower, self.randomize_mass_upper
 
-            for env_id in env_ids:
-                env = self.envs[env_id]
-                handle = self.gym.find_actor_handle(env, 'object')
-                prop = self.gym.get_actor_rigid_body_properties(env, handle)
-                for p in prop:
-                    p.mass = np.random.uniform(lower, upper)
-                self.gym.set_actor_rigid_body_properties(env, handle, prop)
-                self._update_priv_buf(env_id=env_id, name='obj_mass', value=prop[0].mass, lower=0, upper=0.2)
-        else:
-            for env_id in env_ids:
-                env = self.envs[env_id]
-                handle = self.gym.find_actor_handle(env, 'object')
-                prop = self.gym.get_actor_rigid_body_properties(env, handle)
-                self._update_priv_buf(env_id=env_id, name='obj_mass', value=prop[0].mass, lower=0, upper=0.2)
+            ## pass
+            # Randomise the mass of the links (add noise)
 
         if self.randomize_pd_gains:
             self.p_gain[env_ids] = torch_rand_float(
@@ -532,43 +435,6 @@ class OpenManipulatorPick(VecTask):
         else:
             self.priv_info_buf[env_id, s:e] = 0
 
-    def _setup_object_info(self, o_config):
-        self.object_type = o_config['type']
-        raw_prob = o_config['sampleProb']
-        assert (sum(raw_prob) == 1)
-
-        primitive_list = self.object_type.split('+')
-        print('---- Primitive List ----')
-        print(primitive_list)
-        self.object_type_prob = []
-        self.object_type_list = []
-        self.asset_files_dict = {
-            'simple_tennis_ball': 'assets/ball/ball.urdf',
-        }
-        for p_id, prim in enumerate(primitive_list):
-            if 'cuboid' in prim:
-                subset_name = self.object_type.split('_')[-1]
-                cuboids = sorted(glob(f'assets/cuboid/{subset_name}/*.urdf'))
-                cuboid_list = [f'cuboid_{i}' for i in range(len(cuboids))]
-                self.object_type_list += cuboid_list
-                for i, name in enumerate(cuboids):
-                    self.asset_files_dict[f'cuboid_{i}'] = name.replace('assets/', '')
-                self.object_type_prob += [raw_prob[p_id] / len(cuboid_list) for _ in cuboid_list]
-            elif 'cylinder' in prim:
-                subset_name = self.object_type.split('_')[-1]
-                cylinders = sorted(glob(f'assets/cylinder/{subset_name}/*.urdf'))
-                cylinder_list = [f'cylinder_{i}' for i in range(len(cylinders))]
-                self.object_type_list += cylinder_list
-                for i, name in enumerate(cylinders):
-                    self.asset_files_dict[f'cylinder_{i}'] = name.replace('assets/', '')
-                self.object_type_prob += [raw_prob[p_id] / len(cylinder_list) for _ in cylinder_list]
-            else:
-                self.object_type_list += [prim]
-                self.object_type_prob += [raw_prob[p_id]]
-        print('---- Object List ----')
-        print(self.object_type_list)
-        assert (len(self.object_type_list) == len(self.object_type_prob))
-
     def _allocate_task_buffer(self, num_envs):
         # extra buffers for observe randomized params
         self.prop_hist_len = self.config['env']['hora']['propHistoryLen']
@@ -585,9 +451,9 @@ class OpenManipulatorPick(VecTask):
         self.torque_penalty_scale = r_config['torquePenaltyScale']
         self.work_penalty_scale = r_config['workPenaltyScale']
 
-    def _create_object_asset(self):
+    def _create_assets(self):
 
-        print("Creating object assets")
+        print("Creating assets")
 
         # object file to asset
         asset_root =  os.path.join(pathlib.Path(__file__).parent.parent.parent.resolve(), "assets")
@@ -608,41 +474,13 @@ class OpenManipulatorPick(VecTask):
             omx_asset_options.default_dof_drive_mode = gymapi.DOF_MODE_POS
         self.omx_asset = self.gym.load_asset(self.sim, asset_root, omx_asset_file, omx_asset_options)
 
-        # load object asset
-        self.object_asset_list = []
-        for object_type in self.object_type_list:
-            object_asset_file = self.asset_files_dict[object_type]
-            object_asset_options = gymapi.AssetOptions()
-            object_asset = self.gym.load_asset(self.sim, asset_root, object_asset_file, object_asset_options)
-            self.object_asset_list.append(object_asset)
 
-    def _init_object_pose(self):
+    def _init_actor_pose(self):
         omx_start_pose = gymapi.Transform()
         omx_start_pose.p = gymapi.Vec3(0, 0, 0.5)
         omx_start_pose.r = gymapi.Quat.from_axis_angle(
             gymapi.Vec3(0, 1, 0), -np.pi / 2) * gymapi.Quat.from_axis_angle(gymapi.Vec3(1, 0, 0), np.pi / 2)
-        object_start_pose = gymapi.Transform()
-        object_start_pose.p = gymapi.Vec3()
-        object_start_pose.p.x = omx_start_pose.p.x
-        pose_dx, pose_dy, pose_dz = -0.01, -0.04, 0.15
-
-        object_start_pose.p.x = omx_start_pose.p.x + pose_dx
-        object_start_pose.p.y = omx_start_pose.p.y + pose_dy
-        object_start_pose.p.z = omx_start_pose.p.z + pose_dz
-
-        object_start_pose.p.y = omx_start_pose.p.y - 0.01
-        # for grasp pose generation, it is used to initialize the object
-        # it should be slightly higher than the fingertip
-        # so it is set to be 0.66 for internal allegro and 0.64 for the public allegro
-        # ----
-        # for in-hand object rotation, the initialization of z is only used in the first step
-        # it is set to be 0.65 for backward compatibility
-        # object_z = 0.66 if self.save_init_pose else 0.65
-        object_z = 0.65
-        # if 'internal' not in self.grasp_cache_name:
-        #     object_z -= 0.02
-        object_start_pose.p.z = object_z
-        return omx_start_pose, object_start_pose
+        return omx_start_pose
 
 
 def compute_omx_reward(

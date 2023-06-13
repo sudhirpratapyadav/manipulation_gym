@@ -293,7 +293,7 @@ init_joint_pos = dof_pos.clone().squeeze(-1)
 
 # ------------------------------------------------------------------------------------
 
-current_joint_idx = 4
+current_joint_idx = 0
 current_stage = 0
 current_joint_dir = [1,-1,1]
 np.set_printoptions(precision=2, suppress=True)
@@ -307,36 +307,36 @@ while not gym.query_viewer_has_closed(viewer):
     # refresh tensors
     gym.refresh_dof_state_tensor(sim)
 
-    # joint_action = torch.Tensor([0.0, 0.0, 0.0, 0.0]).to(device)
-    # gripper_action = torch.Tensor([0.0, 0.0]).to(device)
+    joint_action = torch.Tensor([0.0, 0.0, 0.0, 0.0]).to(device)
+    gripper_action = torch.Tensor([0.0, 0.0]).to(device)
 
-    # if current_joint_idx<4:
+    if current_joint_idx<4:
 
-    #     print(f"joint_{current_joint_idx+1}_{current_stage}: {rad2deg(dof_pos[0, :4, 0]).cpu().numpy()}")
+        print(f"joint_{current_joint_idx+1}_{current_stage}: {rad2deg(dof_pos[0, :4, 0]).cpu().numpy()}")
 
-    #     joint_action[current_joint_idx] = 10.0*current_joint_dir[current_stage]
+        joint_action[current_joint_idx] = 10.0*current_joint_dir[current_stage]
 
-    #     if current_stage==0 and (dof_pos[0, current_joint_idx, 0]-init_joint_pos[0,current_joint_idx]) > deg2rad(20):
-    #         current_stage = 1
-    #     elif current_stage == 1 and (dof_pos[0, current_joint_idx, 0]-init_joint_pos[0,current_joint_idx]) < deg2rad(-20):
-    #         current_stage = 2
-    #     elif current_stage == 2 and (dof_pos[0, current_joint_idx, 0]-init_joint_pos[0,current_joint_idx]) > deg2rad(0):
-    #         current_joint_idx = current_joint_idx + 1
-    #         current_stage = 0
-    # else:
-    #     gripper_gap = 3
-    #     print(f"joint_{current_joint_idx+1}_{current_stage}: {dof_pos[0, 4:, 0].cpu().numpy()}")
-    #     gripper_action[0] = -0.001
-    #     gripper_action[1] = -0.001
+        if current_stage==0 and (dof_pos[0, current_joint_idx, 0]-init_joint_pos[0,current_joint_idx]) > deg2rad(20):
+            current_stage = 1
+        elif current_stage == 1 and (dof_pos[0, current_joint_idx, 0]-init_joint_pos[0,current_joint_idx]) < deg2rad(-20):
+            current_stage = 2
+        elif current_stage == 2 and (dof_pos[0, current_joint_idx, 0]-init_joint_pos[0,current_joint_idx]) > deg2rad(0):
+            current_joint_idx = current_joint_idx + 1
+            current_stage = 0
+    else:
+        gripper_gap = 3
+        print(f"joint_{current_joint_idx+1}_{current_stage}: {dof_pos[0, 4:, 0].cpu().numpy()}")
+        gripper_action[0] = -0.001
+        gripper_action[1] = -0.001
         
 
 
     
 
     
-    # delta_pos = torch.cat((deg2rad(joint_action),gripper_action),0).repeat(num_envs, 1)
+    delta_pos = torch.cat((deg2rad(joint_action),gripper_action),0).repeat(num_envs, 1)
     
-    # target_joint_pos = dof_pos.squeeze(-1) + delta_pos
+    target_joint_pos = dof_pos.squeeze(-1) + delta_pos
 
     # target_joint_pos = dof_pos.squeeze(-1)
 

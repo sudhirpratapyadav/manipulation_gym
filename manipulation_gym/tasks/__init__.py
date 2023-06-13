@@ -29,9 +29,11 @@
 
 from manipulation_gym.tasks.open_manipulator_pick import OpenManipulatorPick
 from manipulation_gym.tasks.open_manipulator_place import OpenManipulatorPlace
+from manipulation_gym.tasks.open_manipulator_move import OpenManipulatorMove
 
 # Mappings from strings to environments
 isaacgym_task_map = {
     'OpenManipulatorPick': OpenManipulatorPick,
     'OpenManipulatorPlace': OpenManipulatorPlace,
+    'OpenManipulatorMove': OpenManipulatorMove,
 }

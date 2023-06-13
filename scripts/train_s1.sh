@@ -11,7 +11,7 @@ EXTRA_ARGS_SLUG=${EXTRA_ARGS// /_}
 echo extra "${EXTRA_ARGS}"
 
 CUDA_VISIBLE_DEVICES=${GPUS} \
-python train.py task=OpenManipulatorPick headless=False seed=${SEED} \
+python train.py task=OpenManipulatorMove headless=False seed=${SEED} \
 task.env.forceScale=2 task.env.randomForceProbScalar=0.25 \
 train.algo=PPO \
 task.env.object.type=cuboid_default \
