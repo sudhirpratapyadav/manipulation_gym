@@ -262,10 +262,19 @@ class VecTask(Env):
             Observations, rewards, resets, info
             Observations are dict of observations (currently only one member called 'obs')
         """
+
+        print("---vec_task.py step---")
+
         action_tensor = torch.clamp(actions, -self.clip_actions, self.clip_actions)
+
+        print(f"action_tensor: {action_tensor.shape}")
+        print("-->pre_physics_step(action_tensor)")
+
         # apply actions
         self.pre_physics_step(action_tensor)
 
+        print(f"simulate for self.control_freq_inv[{self.control_freq_inv}] steps")
+        # dt = 1/120 (120hz), control_freq_inv=6, control_time_dt = dt*6 = 1/20, control_freq = 20hz
         # step physics and render each frame
         for i in range(self.control_freq_inv):
             self.render()
@@ -308,9 +317,13 @@ class VecTask(Env):
         """
         env_ids = self.reset_buf.nonzero().squeeze(-1)
         self.reset_idx(env_ids)
+
+
         zero_actions = self.zero_actions()
         # step the simulator
         self.step(zero_actions)
+
+
         self.obs_dict['obs'] = torch.clamp(self.obs_buf, -self.clip_obs, self.clip_obs).to(self.rl_device)
         return self.obs_dict
 

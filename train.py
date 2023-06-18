@@ -47,24 +47,24 @@ OmegaConf.register_new_resolver('resolve_default', lambda default, arg: default 
 
 @hydra.main(config_name='config', config_path='configs')
 def main(config: DictConfig):
+
     if config.checkpoint:
         config.checkpoint = to_absolute_path(config.checkpoint)
 
     # set numpy formatting for printing only
     set_np_formatting()
+    
 
     # sets seed. if seed is -1 will pick a random one
     config.seed = set_seed(config.seed)
 
-    cprint('Start Building the Environment', 'green', attrs=['bold'])
+    cprint('train.py: Start Building the Environment', 'green', attrs=['bold'])
     env = isaacgym_task_map[config.task_name](
         config=omegaconf_to_dict(config.task),
         sim_device=config.sim_device,
         graphics_device_id=config.graphics_device_id,
         headless=config.headless,
     )
-
-    
 
     output_dif = os.path.join('outputs', config.train.ppo.output_name)
     os.makedirs(output_dif, exist_ok=True)

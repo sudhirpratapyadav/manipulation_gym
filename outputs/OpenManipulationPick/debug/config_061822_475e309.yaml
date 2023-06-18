@@ -1,0 +1,152 @@
+task_name: ${task.name}
+num_envs: 16
+seed: 0
+physics_engine: physx
+pipeline: gpu
+sim_device: cuda:0
+rl_device: cuda:0
+graphics_device_id: 0
+num_threads: 4
+solver_type: 1
+num_subscenes: 4
+test: false
+checkpoint: ''
+headless: false
+task:
+  name: OpenManipulatorMove
+  physics_engine: ${..physics_engine}
+  on_evaluation: false
+  env:
+    numEnvs: ${resolve_default:16384,${...num_envs}}
+    numObservations: 24
+    numActions: 4
+    envSpacing: 0.25
+    episodeLength: 400
+    enableDebugVis: false
+    aggregateMode: false
+    controller:
+      torque_control: false
+      controlFrequencyInv: 6
+      pgain: 3
+      dgain: 0.1
+    clipObservations: 5.0
+    clipActions: 1.0
+    forceScale: 2
+    randomForceProbScalar: 0.25
+    forceDecay: 0.9
+    forceDecayInterval: 0.08
+    propHistoryLen: 30
+    privInfoDim: 9
+    reward:
+      angvelClipMin: -0.5
+      angvelClipMax: 0.5
+      rotateRewardScale: 1.0
+      objLinvelPenaltyScale: -0.3
+      poseDiffPenaltyScale: -0.3
+      torquePenaltyScale: -0.1
+      workPenaltyScale: -2.0
+    randomization:
+      randomizeMass: true
+      randomizeMassLower: 0.01
+      randomizeMassUpper: 0.25
+      randomizeCOM: true
+      randomizeCOMLower: -0.01
+      randomizeCOMUpper: 0.01
+      randomizeFriction: true
+      randomizeFrictionLower: 0.3
+      randomizeFrictionUpper: 3.0
+      randomizeScale: true
+      scaleListInit: true
+      randomizeScaleList:
+      - 0.7
+      - 0.72
+      - 0.74
+      - 0.76
+      - 0.78
+      - 0.8
+      - 0.82
+      - 0.84
+      - 0.86
+      randomizeScaleLower: 0.75
+      randomizeScaleUpper: 0.8
+      randomizePDGains: true
+      randomizePGainLower: 2.9
+      randomizePGainUpper: 3.1
+      randomizeDGainLower: 0.09
+      randomizeDGainUpper: 0.11
+      jointNoiseScale: 0.02
+    privInfo:
+      enableObjPos: true
+      enableObjScale: true
+      enableObjMass: true
+      enableObjCOM: true
+      enableObjFriction: true
+    asset:
+      open_manipulator_asset: open_manipulator/open_manipulator_robot.urdf
+    enableCameraSensors: false
+  sim:
+    dt: 0.0083333
+    substeps: 1
+    up_axis: z
+    use_gpu_pipeline: ${eq:${...pipeline},'gpu'}
+    gravity:
+    - 0.0
+    - 0.0
+    - -9.81
+    physx:
+      num_threads: ${....num_threads}
+      solver_type: ${....solver_type}
+      use_gpu: ${contains:'cuda',${....sim_device}}
+      num_position_iterations: 8
+      num_velocity_iterations: 0
+      max_gpu_contact_pairs: 8388608
+      num_subscenes: ${....num_subscenes}
+      contact_offset: 0.002
+      rest_offset: 0.0
+      bounce_threshold_velocity: 0.2
+      max_depenetration_velocity: 1000.0
+      default_buffer_size_multiplier: 5.0
+      contact_collection: 2
+train:
+  seed: ${..seed}
+  algo: PPO
+  network:
+    mlp:
+      units:
+      - 512
+      - 256
+      - 128
+    priv_mlp:
+      units:
+      - 256
+      - 128
+      - 8
+  load_path: ${..checkpoint}
+  ppo:
+    output_name: OpenManipulationPick/debug
+    normalize_input: true
+    normalize_value: true
+    value_bootstrap: true
+    num_actors: ${...task.env.numEnvs}
+    normalize_advantage: true
+    gamma: 0.99
+    tau: 0.95
+    learning_rate: 0.005
+    kl_threshold: 0.02
+    horizon_length: 8
+    minibatch_size: 32
+    mini_epochs: 5
+    clip_value: true
+    critic_coef: 4
+    entropy_coef: 0.0
+    e_clip: 0.2
+    bounds_loss_coef: 0.0001
+    truncate_grads: true
+    grad_norm: 1.0
+    save_best_after: 0
+    save_frequency: 500
+    max_agent_steps: 1500000000
+    priv_info: true
+    priv_info_dim: 9
+    priv_info_embed_dim: 8
+    proprio_adapt: false

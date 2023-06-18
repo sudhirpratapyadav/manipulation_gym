@@ -19,8 +19,11 @@ import os
 import pathlib
 from isaacgym import gymapi
 from isaacgym import gymutil
+# from isaacgym import gymtorch
 
 import numpy as np
+
+# from isaacgym.torch_utils import to_torch
 
 
 def print_asset_info(asset, name):
@@ -61,6 +64,9 @@ def print_asset_info(asset, name):
     print(dof_properties.dtype)
 
 
+
+
+
 def print_actor_info(gym, env, actor_handle):
 
     name = gym.get_actor_name(env, actor_handle)
@@ -73,6 +79,8 @@ def print_actor_info(gym, env, actor_handle):
 
     dof_names = gym.get_actor_dof_names(env, actor_handle)
     dof_dict = gym.get_actor_dof_dict(env, actor_handle)
+
+    rigid_body_prop = gym.get_actor_rigid_body_properties(env, actor_handle)
 
     print()
     print("===== Actor: %s =======================================" % name)
@@ -88,7 +96,11 @@ def print_actor_info(gym, env, actor_handle):
     print("\n Degrees Of Freedom (DOFs)")
     print(dof_names)
     print(dof_dict)
-    print()
+
+    print("\nRigit Body Properties Bodies")
+    for i in range(len(body_names)):
+        print("Body '%s' has mass" % body_names[i], rigid_body_prop[i].mass)
+        print("Body '%s' has inertia" % body_names[i], type(rigid_body_prop[i].inertia))
 
     # Get body state information
     body_states = gym.get_actor_rigid_body_states(

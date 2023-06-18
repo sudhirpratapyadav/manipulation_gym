@@ -210,7 +210,7 @@ table_pose = gymapi.Transform()
 table_pose.p = gymapi.Vec3(0.5*table_dims.x-0.1, 0.0, 0.5 * table_dims.z)
 
 # Grid of envs
-spacing = 1  
+spacing = 0.5  
 lower = gymapi.Vec3(-spacing, -spacing, 0.0)
 upper = gymapi.Vec3(spacing, spacing, spacing)
 num_envs = args.num_env
@@ -247,8 +247,8 @@ for i in range(num_envs):
     ee_idxs.append(ee_idx) 
 
 # Set camera viewing direction [position of camera, view target position]
-cam_pos = gymapi.Vec3(2, 2, 2)
-cam_target = gymapi.Vec3(0, 0, 0)
+cam_pos = gymapi.Vec3(1, 1, 1)
+cam_target = gymapi.Vec3(0, 0, -0.5)
 middle_env = envs[num_envs // 2 + num_env_per_row // 2]
 gym.viewer_camera_look_at(viewer, middle_env, cam_pos, cam_target)
 
@@ -310,33 +310,37 @@ while not gym.query_viewer_has_closed(viewer):
     joint_action = torch.Tensor([0.0, 0.0, 0.0, 0.0]).to(device)
     gripper_action = torch.Tensor([0.0, 0.0]).to(device)
 
+    max_angle = 30
+    max_step = 10.0
+
     if current_joint_idx<4:
 
         print(f"joint_{current_joint_idx+1}_{current_stage}: {rad2deg(dof_pos[0, :4, 0]).cpu().numpy()}")
 
-        joint_action[current_joint_idx] = 10.0*current_joint_dir[current_stage]
+        joint_action[current_joint_idx] = max_step*current_joint_dir[current_stage]
 
-        if current_stage==0 and (dof_pos[0, current_joint_idx, 0]-init_joint_pos[0,current_joint_idx]) > deg2rad(20):
+        if current_stage==0 and (dof_pos[0, current_joint_idx, 0]-init_joint_pos[0,current_joint_idx]) > deg2rad(max_angle):
             current_stage = 1
-        elif current_stage == 1 and (dof_pos[0, current_joint_idx, 0]-init_joint_pos[0,current_joint_idx]) < deg2rad(-20):
+        elif current_stage == 1 and (dof_pos[0, current_joint_idx, 0]-init_joint_pos[0,current_joint_idx]) < deg2rad(-max_angle):
             current_stage = 2
         elif current_stage == 2 and (dof_pos[0, current_joint_idx, 0]-init_joint_pos[0,current_joint_idx]) > deg2rad(0):
             current_joint_idx = current_joint_idx + 1
             current_stage = 0
+
+        delta_pos = torch.cat((deg2rad(joint_action),gripper_action),0).repeat(num_envs, 1)
+    
+        target_joint_pos = dof_pos.squeeze(-1) + delta_pos
+
+    elif not torch.allclose(dof_pos.squeeze(-1), init_joint_pos, atol=0.05):
+        # gripper_gap = 3
+        # print(f"joint_{current_joint_idx+1}_{current_stage}: {dof_pos[0, 4:, 0].cpu().numpy()}")
+        # gripper_action[0] = -0.001
+        # gripper_action[1] = -0.001
+        target_joint_pos = init_joint_pos.clone()
     else:
-        gripper_gap = 3
-        print(f"joint_{current_joint_idx+1}_{current_stage}: {dof_pos[0, 4:, 0].cpu().numpy()}")
-        gripper_action[0] = -0.001
-        gripper_action[1] = -0.001
+        current_joint_idx = 0
         
-
-
-    
-
-    
-    delta_pos = torch.cat((deg2rad(joint_action),gripper_action),0).repeat(num_envs, 1)
-    
-    target_joint_pos = dof_pos.squeeze(-1) + delta_pos
+   
 
     # target_joint_pos = dof_pos.squeeze(-1)
 

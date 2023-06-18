@@ -15,7 +15,7 @@ env:
   aggregateMode: False
 
   controller:
-    torque_control: True
+    torque_control: False
     controlFrequencyInv: 6  # 20Hz
     pgain: 3
     dgain: 0.1

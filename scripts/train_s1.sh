@@ -14,7 +14,6 @@ CUDA_VISIBLE_DEVICES=${GPUS} \
 python train.py task=OpenManipulatorMove headless=False seed=${SEED} \
 task.env.forceScale=2 task.env.randomForceProbScalar=0.25 \
 train.algo=PPO \
-task.env.object.type=cuboid_default \
 train.ppo.priv_info=True train.ppo.proprio_adapt=False \
 train.ppo.output_name=OpenManipulationPick/"${CACHE}" \
 ${EXTRA_ARGS}

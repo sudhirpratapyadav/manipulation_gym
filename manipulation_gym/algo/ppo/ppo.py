@@ -12,6 +12,7 @@
 
 import os
 import time
+from termcolor import cprint
 import torch
 
 from manipulation_gym.algo.ppo.experience import ExperienceBuffer
@@ -169,7 +170,11 @@ class PPO(object):
         res_dict['values'] = self.value_mean_std(res_dict['values'], True)
         return res_dict
 
+
     def train(self):
+
+        cprint('\nppo.py: train() START', 'green', attrs=['bold'])
+
         _t = time.time()
         _last_t = time.time()
         self.obs = self.env.reset()
@@ -177,7 +182,13 @@ class PPO(object):
 
         while self.agent_steps < self.max_agent_steps:
             self.epoch_num += 1
-            a_losses, c_losses, b_losses, entropies, kls = self.train_epoch()
+
+            # collect minibatch data
+            _t1 = time.time()
+            self.set_eval()
+            self.play_steps()
+            self.data_collect_time += (time.time() - _t1)
+
             self.storage.data_dict = None
 
             all_fps = self.agent_steps / (time.time() - _t)
@@ -190,25 +201,52 @@ class PPO(object):
                           f'Current Best: {self.best_rewards:.2f}'
             print(info_string)
 
-            self.write_stats(a_losses, c_losses, b_losses, entropies, kls)
-
-            mean_rewards = self.episode_rewards.get_mean()
-            mean_lengths = self.episode_lengths.get_mean()
-            self.writer.add_scalar('episode_rewards/step', mean_rewards, self.agent_steps)
-            self.writer.add_scalar('episode_lengths/step', mean_lengths, self.agent_steps)
-            checkpoint_name = f'ep_{self.epoch_num}_step_{int(self.agent_steps // 1e6):04}M_reward_{mean_rewards:.2f}'
-
-            if self.save_freq > 0:
-                if self.epoch_num % self.save_freq == 0:
-                    self.save(os.path.join(self.nn_dir, checkpoint_name))
-                    self.save(os.path.join(self.nn_dir, 'last'))
-
-            if mean_rewards > self.best_rewards and self.epoch_num >= self.save_best_after:
-                print(f'save current best reward: {mean_rewards:.2f}')
-                self.best_rewards = mean_rewards
-                self.save(os.path.join(self.nn_dir, 'best'))
-
         print('max steps achieved')
+
+
+    # def train(self):
+
+    #     cprint('\nppo.py: train() START', 'green', attrs=['bold'])
+
+    #     _t = time.time()
+    #     _last_t = time.time()
+    #     self.obs = self.env.reset()
+    #     self.agent_steps = self.batch_size
+
+    #     while self.agent_steps < self.max_agent_steps:
+    #         self.epoch_num += 1
+    #         a_losses, c_losses, b_losses, entropies, kls = self.train_epoch()
+    #         self.storage.data_dict = None
+
+    #         all_fps = self.agent_steps / (time.time() - _t)
+    #         last_fps = self.batch_size / (time.time() - _last_t)
+    #         _last_t = time.time()
+    #         info_string = f'Agent Steps: {int(self.agent_steps // 1e6):04}M | FPS: {all_fps:.1f} | ' \
+    #                       f'Last FPS: {last_fps:.1f} | ' \
+    #                       f'Collect Time: {self.data_collect_time / 60:.1f} min | ' \
+    #                       f'Train RL Time: {self.rl_train_time / 60:.1f} min | ' \
+    #                       f'Current Best: {self.best_rewards:.2f}'
+    #         print(info_string)
+
+    #         self.write_stats(a_losses, c_losses, b_losses, entropies, kls)
+
+    #         mean_rewards = self.episode_rewards.get_mean()
+    #         mean_lengths = self.episode_lengths.get_mean()
+    #         self.writer.add_scalar('episode_rewards/step', mean_rewards, self.agent_steps)
+    #         self.writer.add_scalar('episode_lengths/step', mean_lengths, self.agent_steps)
+    #         checkpoint_name = f'ep_{self.epoch_num}_step_{int(self.agent_steps // 1e6):04}M_reward_{mean_rewards:.2f}'
+
+    #         if self.save_freq > 0:
+    #             if self.epoch_num % self.save_freq == 0:
+    #                 self.save(os.path.join(self.nn_dir, checkpoint_name))
+    #                 self.save(os.path.join(self.nn_dir, 'last'))
+
+    #         if mean_rewards > self.best_rewards and self.epoch_num >= self.save_best_after:
+    #             print(f'save current best reward: {mean_rewards:.2f}')
+    #             self.best_rewards = mean_rewards
+    #             self.save(os.path.join(self.nn_dir, 'best'))
+
+    #     print('max steps achieved')
 
     def save(self, name):
         weights = {
@@ -326,17 +364,35 @@ class PPO(object):
         return a_losses, c_losses, b_losses, entropies, kls
 
     def play_steps(self):
+        print(f"self.horizon_length: {self.horizon_length}")
         for n in range(self.horizon_length):
+
             res_dict = self.model_act(self.obs)
+
             # collect o_t
             self.storage.update_data('obses', n, self.obs['obs'])
             self.storage.update_data('priv_info', n, self.obs['priv_info'])
             for k in ['actions', 'neglogpacs', 'values', 'mus', 'sigmas']:
                 self.storage.update_data(k, n, res_dict[k])
+
             # do env step
-            actions = torch.clamp(res_dict['actions'], -1.0, 1.0)
+            # actions = torch.clamp(res_dict['actions'], -1.0, 1.0)\
+
+            joint_action = torch.Tensor([10.0, 0.0, 0.0, 0.0]).to(self.device)
+            # gripper_action = torch.Tensor([0.0, 0.0]).to(self.device)
+
+            # actions = torch.cat((torch.deg2rad(joint_action),gripper_action),0).repeat(res_dict['actions'].shape[0], 1)
+            actions = torch.deg2rad(joint_action).repeat(res_dict['actions'].shape[0], 1)
+
+            print(f"n:{n}")
+            print(f"actions: {actions.shape}")
+
             self.obs, rewards, self.dones, infos = self.env.step(actions)
             rewards = rewards.unsqueeze(1)
+
+            print(f"obs: {self.obs['obs'].shape}")
+            print("----------\n")
+
             # update dones and rewards after env step
             self.storage.update_data('dones', n, self.dones)
             shaped_rewards = 0.01 * rewards.clone()

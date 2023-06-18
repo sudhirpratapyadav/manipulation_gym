@@ -18,8 +18,8 @@ task:
   on_evaluation: false
   env:
     numEnvs: ${resolve_default:16384,${...num_envs}}
-    numObservations: 96
-    numActions: 16
+    numObservations: 24
+    numActions: 4
     envSpacing: 0.25
     episodeLength: 400
     enableDebugVis: false
@@ -31,14 +31,12 @@ task:
       dgain: 0.1
     clipObservations: 5.0
     clipActions: 1.0
-    reset_height_threshold: 0.645
     forceScale: 2
     randomForceProbScalar: 0.25
     forceDecay: 0.9
     forceDecayInterval: 0.08
-    hora:
-      propHistoryLen: 30
-      privInfoDim: 9
+    propHistoryLen: 30
+    privInfoDim: 9
     reward:
       angvelClipMin: -0.5
       angvelClipMax: 0.5
@@ -47,7 +45,6 @@ task:
       poseDiffPenaltyScale: -0.3
       torquePenaltyScale: -0.1
       workPenaltyScale: -2.0
-    baseObjScale: 0.8
     randomization:
       randomizeMass: true
       randomizeMassLower: 0.01
@@ -84,10 +81,6 @@ task:
       enableObjMass: true
       enableObjCOM: true
       enableObjFriction: true
-    object:
-      type: cuboid_default
-      sampleProb:
-      - 1.0
     asset:
       open_manipulator_asset: open_manipulator/open_manipulator_robot.urdf
     enableCameraSensors: false
